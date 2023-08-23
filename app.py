@@ -1,10 +1,13 @@
 from flask import Flask, request, render_template
 import cv2
 import numpy as np
+import requests
 from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)
+
+GITHUB_REPO_URL = "https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME/main/annotations/"
 
 @app.route("/", methods=['GET'])
 def index():
@@ -12,9 +15,9 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload():
-    # Get the image file and image name from the request
+    # Get the image file from the request
     image_file = request.files['image']
-    image_name = request.form['imageName']
+    image_name = image_file.filename.split('.')[0]
     
     # Convert the image data to a NumPy array
     image_data = image_file.read()
@@ -39,13 +42,12 @@ def upload():
     
     height, width = img.shape
     
-    # Open the annotations file
-    image_name=image_name.split('.')[0]
-    try:
-        with open("annotations/"+image_name+'.txt', 'r', encoding='utf-8') as file:
-            lines = file.readlines()
-    except:
-        return render_template("index.html", text="Not a Valid Image")
+    # Fetch the annotations file from GitHub
+    response = requests.get(GITHUB_REPO_URL + image_name + '.txt')
+    if response.status_code != 200:
+        return render_template("index.html", text="Annotation not found for this image!")
+    
+    lines = response.text.splitlines()
     
     text = ''
     prev_y_center = 0
