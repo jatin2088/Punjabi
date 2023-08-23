@@ -4,16 +4,37 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Image Upload</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
-    <form action="/upload" method="POST" enctype="multipart/form-data">
-        <input type="file" name="image" required>
-        <input type="text" name="imageName" placeholder="Enter Image Name" required>
-        <input type="submit" value="Upload">
+
+<div class="container mt-5">
+    <h1 class="text-center">Punjabi Natural Scene Text Detection</h1>
+    <hr>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <div class="custom-file mb-3">
+            <input type="file" class="custom-file-input" id="image" name="image" required>
+            <label class="custom-file-label" for="image">Choose file</label>
+        </div>
+        <button type="submit" class="btn btn-primary">Upload and Process</button>
     </form>
-    {% if text %}
-    <h2>Processed Text:</h2>
-    <p>{{ text }}</p>
-    {% endif %}
+    <hr>
+    <h5>Result:</h5>
+    <pre id="result"></pre>
+</div>
+
+<!-- jQuery and Bootstrap JS -->
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+<script>
+    // This script changes the label of the file input to show the chosen file's name
+    $('.custom-file-input').on('change', function() {
+        let fileName = $(this).val().split('\\').pop();
+        $(this).next('.custom-file-label').addClass("selected").html(fileName);
+    });
+</script>
+
 </body>
 </html>
