@@ -1,0 +1,4 @@
+Flask
+Flask-Cors==4.0.0
+numpy
+opencv-python==4.7.0.72
