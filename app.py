@@ -17,8 +17,6 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload():
     image_file = request.files['image']
-
-    # Extracting image name without extension
     image_name, _ = os.path.splitext(image_file.filename)
 
     image_data = image_file.read()
@@ -41,12 +39,23 @@ def upload():
     text = ''
     prev_y_center = 0
     for line in lines:
-        line = line.split()
-        char, x_center, y_center, w, h = line[0], float(line[1]), float(line[2]), float(line[3]), float(line[4])
+        line = line.strip()  # Remove leading/trailing whitespaces
+
+        # If the line is empty, it indicates a space
+        if not line:
+            text += ' '
+            continue
+
+        line_data = line.split()
+        char, x_center, y_center, w, h = line_data[0], float(line_data[1]), float(line_data[2]), float(line_data[3]), float(line_data[4])
         x_center, y_center, w, h = x_center * width, y_center * height, w * width, h * height
+        
+        # If y_center has changed significantly, it means we moved to the next line
         if y_center - prev_y_center > h:
             text += '\n'
         prev_y_center = y_center
+        
+        # Add character to the text
         text += char
 
     return render_template("index.html", text=text)
