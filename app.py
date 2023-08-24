@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import requests
 from flask_cors import CORS
+import os
 
 app = Flask(__name__)
 CORS(app)
@@ -16,7 +17,9 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload():
     image_file = request.files['image']
-    image_name = image_file.filename.split('.')[0]
+
+    # Extracting image name without extension
+    image_name, _ = os.path.splitext(image_file.filename)
 
     image_data = image_file.read()
     nparr = np.frombuffer(image_data, np.uint8)
@@ -41,8 +44,6 @@ def upload():
         line = line.split()
         char, x_center, y_center, w, h = line[0], float(line[1]), float(line[2]), float(line[3]), float(line[4])
         x_center, y_center, w, h = x_center * width, y_center * height, w * width, h * height
-        x, y = int(x_center - w//2), int(y_center - h//2)
-        w, h = int(w), int(h)
         if y_center - prev_y_center > h:
             text += '\n'
         prev_y_center = y_center
