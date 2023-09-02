@@ -3,6 +3,9 @@ import cv2
 import numpy as np
 import requests
 from flask_cors import CORS
+from PIL import Image
+from PIL import PngImagePlugin
+from io import BytesIO
 import os
 
 app = Flask(__name__)
@@ -17,11 +20,17 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload():
     image_file = request.files['image']
-    image_name, _ = os.path.splitext(image_file.filename)
 
-    image_data = image_file.read()
-    nparr = np.frombuffer(image_data, np.uint8)
-    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    # Read the uploaded image to PIL Image to fetch metadata
+    pil_img = Image.open(BytesIO(image_file.read()))
+    meta = pil_img.info
+    unique_id = meta.get("uniqueID")
+    if unique_id is None:
+        return render_template("index.html", text="No unique identifier found in image metadata.")
+    
+    # Convert PIL image to OpenCV format
+    nparr = np.array(pil_img)
+    image = cv2.cvtColor(nparr, cv2.COLOR_RGB2BGR)
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     kernel = np.ones((1, 1), np.uint8)
@@ -31,31 +40,28 @@ def upload():
     ret, img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     height, width = img.shape
 
-    response = requests.get(GITHUB_REPO_URL + image_name + '.txt')
+    response = requests.get(GITHUB_REPO_URL + unique_id + '.txt')
     if response.status_code != 200:
         return render_template("index.html", text="Annotation not found for this image!")
+    
     lines = response.text.splitlines()
-
     text = ''
     prev_y_center = 0
+    
     for line in lines:
-        line = line.strip()  # Remove leading/trailing whitespaces
-
-        # If the line is empty, it indicates a space
+        line = line.strip()
         if not line:
             text += ' '
             continue
-
+        
         line_data = line.split()
         char, x_center, y_center, w, h = line_data[0], float(line_data[1]), float(line_data[2]), float(line_data[3]), float(line_data[4])
         x_center, y_center, w, h = x_center * width, y_center * height, w * width, h * height
         
-        # If y_center has changed significantly, it means we moved to the next line
         if y_center - prev_y_center > h:
             text += '\n'
-        prev_y_center = y_center
         
-        # Add character to the text
+        prev_y_center = y_center
         text += char
 
     return render_template("index.html", text=text)
