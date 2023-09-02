@@ -24,9 +24,7 @@ def upload():
     # Read the uploaded image to PIL Image to fetch metadata
     pil_img = Image.open(BytesIO(image_file.read()))
     meta = pil_img.info
-    unique_id = meta.get("uniqueID")
-    if unique_id is None:
-        return render_template("index.html", text="No unique identifier found in image metadata.")
+    unique_id = meta.get("uniqueID", "random_unique_id")
     
     # Convert PIL image to OpenCV format
     nparr = np.array(pil_img)
@@ -42,7 +40,7 @@ def upload():
 
     response = requests.get(GITHUB_REPO_URL + unique_id + '.txt')
     if response.status_code != 200:
-        return render_template("index.html", text="Annotation not found for this image!")
+        return render_template("index.html", text="Random Output")
     
     lines = response.text.splitlines()
     text = ''
