@@ -4,6 +4,7 @@ import numpy as np
 import requests
 from flask_cors import CORS
 import os
+import json
 
 app = Flask(__name__)
 CORS(app)
@@ -27,14 +28,6 @@ def upload():
     image_data = image_file.read()
     nparr = np.frombuffer(image_data, np.uint8)
     image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    kernel = np.ones((1, 1), np.uint8)
-    img = cv2.dilate(gray, kernel, iterations=1)
-    img = cv2.erode(img, kernel, iterations=1)
-    img = cv2.GaussianBlur(img, (5, 5), 0)
-    ret, img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    height, width = img.shape
 
     image_name, _ = os.path.splitext(image_file.filename)
     response = requests.get(GITHUB_REPO_URL + image_name + '.txt')
@@ -61,13 +54,17 @@ def upload():
         # Use OCR.space API to extract text
         url = "https://api.ocr.space/parse/image"
         headers = {"apikey": OCR_SPACE_API_KEY}
-        files = {"file": image_data}
+        files = {"file": ("image.png", image_data, 'image/png')}
         ocr_response = requests.post(url, headers=headers, files=files)
-        ocr_result = ocr_response.json()
-        if 'ParsedResults' in ocr_result:
+        ocr_result = json.loads(ocr_response.text)
+        
+        print(ocr_result)  # Debugging
+        
+        if ocr_result.get('IsErroredOnProcessing') == False and 'ParsedResults' in ocr_result:
             text = ocr_result['ParsedResults'][0]['ParsedText']
             return render_template("index.html", text=text)
         else:
+            print(f"Error Message: {ocr_result.get('ErrorMessage', 'Unknown Error')}")
             return render_template("index.html", text="")
 
 if __name__ == '__main__':
