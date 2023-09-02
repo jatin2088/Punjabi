@@ -20,12 +20,16 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload():
     image_file = request.files['image']
+    file_extension = image_file.filename.split('.')[-1].lower()
+
+    if file_extension != 'png':
+        return render_template("index.html", text="Check file format.")
 
     # Read the uploaded image to PIL Image to fetch metadata
     pil_img = Image.open(BytesIO(image_file.read()))
     meta = pil_img.info
-    unique_id = meta.get("uniqueID", "random_unique_id")
-    
+    unique_id = meta.get("uniqueID", "")
+
     # Convert PIL image to OpenCV format
     nparr = np.array(pil_img)
     image = cv2.cvtColor(nparr, cv2.COLOR_RGB2BGR)
@@ -40,25 +44,25 @@ def upload():
 
     response = requests.get(GITHUB_REPO_URL + unique_id + '.txt')
     if response.status_code != 200:
-        return render_template("index.html", text="Random Output")
-    
+        return render_template("index.html", text="")
+
     lines = response.text.splitlines()
     text = ''
     prev_y_center = 0
-    
+
     for line in lines:
         line = line.strip()
         if not line:
             text += ' '
             continue
-        
+
         line_data = line.split()
         char, x_center, y_center, w, h = line_data[0], float(line_data[1]), float(line_data[2]), float(line_data[3]), float(line_data[4])
         x_center, y_center, w, h = x_center * width, y_center * height, w * width, h * height
-        
+
         if y_center - prev_y_center > h:
             text += '\n'
-        
+
         prev_y_center = y_center
         text += char
 
