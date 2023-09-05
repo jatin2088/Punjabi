@@ -2,44 +2,20 @@ from flask import Flask, request, render_template
 import cv2
 import numpy as np
 import requests
-import os
-import re
-import pytesseract
 from flask_cors import CORS
+import os
 from PIL import Image
 from io import BytesIO
+import pytesseract
 
-
-# Initialize Flask app
 app = Flask(__name__)
 CORS(app)
 
-# GitHub repo URL
 GITHUB_REPO_URL = "https://raw.githubusercontent.com/jatin2088/Punjabi/main/annotations/"
 
-# Download and unzip tesseract data
-gdown.download("https://drive.google.com/uc?id=1gMCrUtn4cbScmFkcHUcKmRbDLJ_z8vOO", "tesseract-ocr.zip", quiet=False)
-with zipfile.ZipFile("tesseract-ocr.zip", "r") as zip_ref:
-    zip_ref.extractall(".")
-
-# Tesseract setup
-os.environ['TESSDATA_PREFIX'] = './tesseract-ocr/4.00/tessdata/'
-
-# Function definitions
-def preprocess_image(image):
-    img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    img_blur = cv2.GaussianBlur(img_gray, (5, 5), 0)
-    _, img_thresh = cv2.threshold(img_blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    return img_thresh
-
-def filter_punjabi(text):
-    pattern = re.compile('[^\u0A00-\u0A7F  \n]')
-    return pattern.sub('', text)
-
-def ocr_from_image(image, lang='pan'):
-    processed_image = preprocess_image(image)
-    text = pytesseract.image_to_string(processed_image, lang=lang, config='--psm 6')
-    return filter_punjabi(text)
+# Setup Tesseract path according to your installation
+# This needs to be customized
+pytesseract.pytesseract.tesseract_cmd = "https://raw.githubusercontent.com/jatin2088/Punjabi/main/tesseract-ocr1/4.00/tessdata/"
 
 @app.route("/", methods=['GET'])
 def index():
@@ -55,39 +31,40 @@ def upload():
 
     image_data = BytesIO(image_file.read())
     pil_img = Image.open(image_data)
-    meta = pil_img.info
-    unique_id = meta.get("uniqueID", "")
-
     nparr = np.array(pil_img)
     image = cv2.cvtColor(nparr, cv2.COLOR_RGB2BGR)
-    height, width = image.shape[:2]
 
-    response = requests.get(GITHUB_REPO_URL + unique_id + '.txt')
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    kernel = np.ones((1, 1), np.uint8)
+    img = cv2.dilate(gray, kernel, iterations=1)
+    img = cv2.erode(img, kernel, iterations=1)
+    img = cv2.GaussianBlur(img, (5, 5), 0)
+    ret, img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    height, width = img.shape
 
+    image_name, _ = os.path.splitext(image_file.filename)
+    response = requests.get(GITHUB_REPO_URL + image_name + '.txt')
     if response.status_code != 200:
-        extracted_text = ocr_from_image(image)
-        if extracted_text:
-            return render_template("index.html", text=extracted_text)
-        else:
-            return render_template("index.html", text="No text could be extracted.")
+        try:
+            ocr_text = pytesseract.image_to_string(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)), lang='pan')
+            text = ocr_text
+        except:
+            text = ""  # Output nothing if OCR also fails
+        return render_template("index.html", text=text)
 
     lines = response.text.splitlines()
     text = ''
     prev_y_center = 0
-
     for line in lines:
         line = line.strip()
         if not line:
             text += ' '
             continue
-
         line_data = line.split()
         char, x_center, y_center, w, h = line_data[0], float(line_data[1]), float(line_data[2]), float(line_data[3]), float(line_data[4])
         x_center, y_center, w, h = x_center * width, y_center * height, w * width, h * height
-
         if y_center - prev_y_center > h:
             text += '\n'
-
         prev_y_center = y_center
         text += char
 
