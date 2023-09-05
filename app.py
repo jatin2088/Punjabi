@@ -4,12 +4,11 @@ import numpy as np
 import requests
 import os
 import re
-import zipfile
-import gdown
 import pytesseract
 from flask_cors import CORS
 from PIL import Image
 from io import BytesIO
+
 
 # Initialize Flask app
 app = Flask(__name__)
