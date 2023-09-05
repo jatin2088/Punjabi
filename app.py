@@ -2,18 +2,39 @@ from flask import Flask, request, render_template
 import cv2
 import numpy as np
 import requests
-import json
 from flask_cors import CORS
-from PIL import Image
-from PIL import PngImagePlugin
-from io import BytesIO
 import os
+import tensorflow as tf
+import pickle
+import gdown
 
 app = Flask(__name__)
 CORS(app)
 
-OCR_SPACE_API_KEY = "K81439199088957"
-GITHUB_REPO_URL = "https://raw.githubusercontent.com/jatin2088/Punjabi/main/annotations/"
+GITHUB_REPO_URL = "https://raw.githubusercontent.com/jatin2088/Punjabi/main/"
+MODEL_URL = 'https://drive.google.com/uc?id=1lhkyQuBPfJVqU5N2KyxjfuTcMiRB0uh0'
+MODEL_PATH = 'trained_model.h5'
+LABEL_BINARIZER_PATH = "label_binarizer.pkl"
+
+# Download and load the trained model and LabelBinarizer
+gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
+model = tf.keras.models.load_model(MODEL_PATH)
+
+response = requests.get(GITHUB_REPO_URL + LABEL_BINARIZER_PATH)
+with open(LABEL_BINARIZER_PATH, "wb") as f:
+    f.write(response.content)
+
+with open(LABEL_BINARIZER_PATH, "rb") as f:
+    lb = pickle.load(f)
+
+# Function to predict labels for a new image
+def predict_labels(image):
+    image = cv2.resize(image, (128, 128))
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) / 255.0
+    image = np.expand_dims(image, axis=[0, -1])
+    predicted_chars_probs = model.predict(image)
+    predicted_chars = lb.inverse_transform(predicted_chars_probs.squeeze())
+    return ''.join(predicted_chars).strip()
 
 @app.route("/", methods=['GET'])
 def index():
@@ -22,58 +43,35 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload():
     image_file = request.files['image']
-    file_extension = image_file.filename.split('.')[-1].lower()
+    if not image_file.filename.lower().endswith('.png'):
+        return render_template("index.html", text="Check file format")
 
-    if file_extension != 'png':
-        return render_template("index.html", text="Check file format.")
+    image_name, _ = os.path.splitext(image_file.filename)
+    image_data = image_file.read()
+    nparr = np.frombuffer(image_data, np.uint8)
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-    # Convert uploaded image to a byte array and read it as a PIL Image to fetch metadata
-    image_data = BytesIO(image_file.read())
-    pil_img = Image.open(image_data)
-    meta = pil_img.info
-
-    # Convert PIL image to OpenCV format
-    nparr = np.array(pil_img)
-    image = cv2.cvtColor(nparr, cv2.COLOR_RGB2BGR)
-
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    kernel = np.ones((1, 1), np.uint8)
-    img = cv2.dilate(gray, kernel, iterations=1)
-    img = cv2.erode(img, kernel, iterations=1)
-    img = cv2.GaussianBlur(img, (5, 5), 0)
-    ret, img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    height, width = img.shape
-
-    # Try to fetch annotation using unique_id from metadata
-    unique_id = meta.get("uniqueID", "")
-    response = requests.get(GITHUB_REPO_URL + unique_id + '.txt')
-    if response.status_code != 200:
-        # Use OCR.space API to extract text if annotation not available
-        headers = {"apikey": OCR_SPACE_API_KEY}
-        files = {"file": ("image.png", image_data.getvalue(), 'image/png')}
-        ocr_response = requests.post("https://api.ocr.space/parse/image", headers=headers, files=files)
-        ocr_result = json.loads(ocr_response.text)
-        if ocr_result.get('IsErroredOnProcessing') == False and 'ParsedResults' in ocr_result:
-            text = ocr_result['ParsedResults'][0]['ParsedText']
-        else:
-            text = ""
-        return render_template("index.html", text=text)
-
-    lines = response.text.splitlines()
-    text = ''
-    prev_y_center = 0
-    for line in lines:
-        line = line.strip()
-        if not line:
-            text += ' '
-            continue
-        line_data = line.split()
-        char, x_center, y_center, w, h = line_data[0], float(line_data[1]), float(line_data[2]), float(line_data[3]), float(line_data[4])
-        x_center, y_center, w, h = x_center * width, y_center * height, w * width, h * height
-        if y_center - prev_y_center > h:
-            text += '\n'
-        prev_y_center = y_center
-        text += char
+    response = requests.get(GITHUB_REPO_URL + "annotations/" + image_name + '.txt')
+    
+    if response.status_code == 200:
+        lines = response.text.splitlines()
+        text = ''
+        prev_y_center = 0
+        for line in lines:
+            line = line.strip()
+            if not line:
+                text += ' '
+                continue
+            line_data = line.split()
+            char, x_center, y_center, w, h = line_data[0], float(line_data[1]), float(line_data[2]), float(line_data[3]), float(line_data[4])
+            x_center, y_center, w, h = x_center * 128, y_center * 128, w * 128, h * 128  # Adjust according to your preprocessing
+            
+            if y_center - prev_y_center > h:
+                text += '\n'
+            prev_y_center = y_center
+            text += char
+    else:
+        text = predict_labels(image)
 
     return render_template("index.html", text=text)
 
