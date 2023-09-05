@@ -6,7 +6,6 @@ import pytesseract
 from PIL import Image
 import requests
 from io import BytesIO
-import re
 
 # Initialize Flask
 app = Flask(__name__)
@@ -52,14 +51,14 @@ def upload():
     nparr = np.array(pil_img)
     image = cv2.cvtColor(nparr, cv2.COLOR_RGB2BGR)
     unique_id = pil_img.info.get("uniqueID", "")
+    
     GITHUB_REPO_URL = "https://raw.githubusercontent.com/jatin2088/Punjabi/main/annotations/"
+    
     response = requests.get(GITHUB_REPO_URL + unique_id + '.txt')
-
     if response.status_code == 200:
         lines = response.text.splitlines()
-        text = ""
-        for line in lines:
-            text += line + "\n"
+        # Assuming each line in the annotation corresponds to a character
+        text = ''.join([line.split()[0] for line in lines])
         return render_template("index.html", text=text)
     else:
         processed_image = preprocess_image(image)
