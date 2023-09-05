@@ -4,14 +4,41 @@ import numpy as np
 import requests
 from flask_cors import CORS
 from PIL import Image
-from PIL import PngImagePlugin
 from io import BytesIO
 import os
+import pytesseract
+import re
 
+# Initialize Flask
 app = Flask(__name__)
 CORS(app)
 
+# Download Tesseract Data
+TESSDATA_PREFIX = '/tmp/tessdata'
+TESSDATA_URL = 'https://github.com/jatin2088/Punjabi/main/tesseract-ocr/4.00/tessdata/'
+
+if not os.path.exists(TESSDATA_PREFIX):
+    os.makedirs(TESSDATA_PREFIX)
+
+required_files = ['pan.traineddata']
+
+for file in required_files:
+    response = requests.get(TESSDATA_URL + file)
+    if response.status_code == 200:
+        with open(os.path.join(TESSDATA_PREFIX, file), 'wb') as f:
+            f.write(response.content)
+    else:
+        print(f"Failed to download {file}")
+
+os.environ['TESSDATA_PREFIX'] = TESSDATA_PREFIX
+
+# GitHub Repo URL
 GITHUB_REPO_URL = "https://raw.githubusercontent.com/jatin2088/Punjabi/main/annotations/"
+
+# Filter Punjabi Text
+def filter_punjabi(text):
+    pattern = re.compile('[^\u0A00-\u0A7F  \n]')
+    return pattern.sub('', text)
 
 @app.route("/", methods=['GET'])
 def index():
@@ -25,48 +52,31 @@ def upload():
     if file_extension != 'png':
         return render_template("index.html", text="Check file format.")
 
-    # Read the uploaded image to PIL Image to fetch metadata
     pil_img = Image.open(BytesIO(image_file.read()))
     meta = pil_img.info
     unique_id = meta.get("uniqueID", "")
 
-    # Convert PIL image to OpenCV format
     nparr = np.array(pil_img)
     image = cv2.cvtColor(nparr, cv2.COLOR_RGB2BGR)
 
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    kernel = np.ones((1, 1), np.uint8)
-    img = cv2.dilate(gray, kernel, iterations=1)
-    img = cv2.erode(img, kernel, iterations=1)
-    img = cv2.GaussianBlur(img, (5, 5), 0)
-    ret, img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    height, width = img.shape
-
     response = requests.get(GITHUB_REPO_URL + unique_id + '.txt')
-    if response.status_code != 200:
-        return render_template("index.html", text="")
-
-    lines = response.text.splitlines()
-    text = ''
-    prev_y_center = 0
-
-    for line in lines:
-        line = line.strip()
-        if not line:
-            text += ' '
-            continue
-
-        line_data = line.split()
-        char, x_center, y_center, w, h = line_data[0], float(line_data[1]), float(line_data[2]), float(line_data[3]), float(line_data[4])
-        x_center, y_center, w, h = x_center * width, y_center * height, w * width, h * height
-
-        if y_center - prev_y_center > h:
-            text += '\n'
-
-        prev_y_center = y_center
-        text += char
-
-    return render_template("index.html", text=text)
+    
+    if response.status_code == 200:
+        # Existing logic
+        lines = response.text.splitlines()
+        text = ''
+        for line in lines:
+            # Your logic here
+            pass
+        return render_template("index.html", text=text)
+    else:
+        try:
+            extracted_text = pytesseract.image_to_string(Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)), lang='pan', config='--psm 6')
+            filtered_text = filter_punjabi(extracted_text)
+            return render_template("index.html", text=filtered_text)
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return render_template("index.html", text="Error in processing image.")
 
 if __name__ == '__main__':
     app.run(port=8080, debug=True, host="0.0.0.0", threaded=True, use_reloader=True, passthrough_errors=True)
