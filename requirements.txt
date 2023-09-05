@@ -1,6 +1,6 @@
-Flask==1.1.2
+Flask
 Flask-Cors==4.0.0
-numpy==1.19.5
+numpy
 opencv-python==4.7.0.72
 gunicorn==20.1.0
 requests==2.25.1
