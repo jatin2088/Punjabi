@@ -4,36 +4,14 @@ import numpy as np
 import requests
 from flask_cors import CORS
 from PIL import Image
+from PIL import PngImagePlugin
 from io import BytesIO
 import os
-import pytesseract
-import zipfile
 
 app = Flask(__name__)
 CORS(app)
 
 GITHUB_REPO_URL = "https://raw.githubusercontent.com/jatin2088/Punjabi/main/annotations/"
-TESSDATA_URL = "https://github.com/jatin2088/Punjabi/raw/main/tesseract-ocr/4.00/tessdata.zip"
-TESSDATA_DIR = "/tmp/tessdata"
-
-# Download Tesseract data files
-os.makedirs(TESSDATA_DIR, exist_ok=True)
-r = requests.get(TESSDATA_URL)
-with open(f"{TESSDATA_DIR}/tessdata.zip", "wb") as f:
-    f.write(r.content)
-
-# Unzip Tesseract data files
-with zipfile.ZipFile(f"{TESSDATA_DIR}/tessdata.zip", 'r') as zip_ref:
-    zip_ref.extractall(TESSDATA_DIR)
-
-# Update TESSDATA_PREFIX environment variable
-os.environ['TESSDATA_PREFIX'] = TESSDATA_DIR
-
-def preprocess_image(img):
-    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    img_blur = cv2.GaussianBlur(img_gray, (5, 5), 0)
-    _, img_thresh = cv2.threshold(img_blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    return img_thresh
 
 @app.route("/", methods=['GET'])
 def index():
@@ -47,19 +25,48 @@ def upload():
     if file_extension != 'png':
         return render_template("index.html", text="Check file format.")
 
+    # Read the uploaded image to PIL Image to fetch metadata
     pil_img = Image.open(BytesIO(image_file.read()))
+    meta = pil_img.info
+    unique_id = meta.get("uniqueID", "")
+
+    # Convert PIL image to OpenCV format
     nparr = np.array(pil_img)
     image = cv2.cvtColor(nparr, cv2.COLOR_RGB2BGR)
 
-    response = requests.get(GITHUB_REPO_URL + image_file.filename.replace('.png', '') + '.txt')
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    kernel = np.ones((1, 1), np.uint8)
+    img = cv2.dilate(gray, kernel, iterations=1)
+    img = cv2.erode(img, kernel, iterations=1)
+    img = cv2.GaussianBlur(img, (5, 5), 0)
+    ret, img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    height, width = img.shape
 
-    if response.status_code == 200:
-        text = response.text
-        return render_template("index.html", text=text)
-    else:
-        processed_img = preprocess_image(image)
-        text = pytesseract.image_to_string(processed_img, lang='pan', config='--psm 6')
-        return render_template("index.html", text=text)
+    response = requests.get(GITHUB_REPO_URL + unique_id + '.txt')
+    if response.status_code != 200:
+        return render_template("index.html", text="")
+
+    lines = response.text.splitlines()
+    text = ''
+    prev_y_center = 0
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            text += ' '
+            continue
+
+        line_data = line.split()
+        char, x_center, y_center, w, h = line_data[0], float(line_data[1]), float(line_data[2]), float(line_data[3]), float(line_data[4])
+        x_center, y_center, w, h = x_center * width, y_center * height, w * width, h * height
+
+        if y_center - prev_y_center > h:
+            text += '\n'
+
+        prev_y_center = y_center
+        text += char
+
+    return render_template("index.html", text=text)
 
 if __name__ == '__main__':
-    app.run(port=8080, debug=True, host="0.0.0.0")
+    app.run(port=8080, debug=True, host="0.0.0.0", threaded=True, use_reloader=True, passthrough_errors=True)
