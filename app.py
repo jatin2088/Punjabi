@@ -2,7 +2,7 @@ from flask import Flask, request, render_template
 import cv2
 import numpy as np
 import requests
-from flask_cors import CORS
+from flask_cors import CORS 
 from PIL import Image
 from io import BytesIO
 import os
