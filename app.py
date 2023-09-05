@@ -1,15 +1,14 @@
-from flask import Flask, request, render_template
-import cv2
-import numpy as np
-import requests
-from flask_cors import CORS
-from PIL import Image
-from io import BytesIO
+from flask import Flask, render_template, request
 import os
+import cv2
+import requests
 import pytesseract
 import re
+from PIL import Image
+from io import BytesIO
+import numpy as np
+from flask_cors import CORS
 
-# Initialize Flask
 app = Flask(__name__)
 CORS(app)
 
@@ -45,11 +44,11 @@ def index():
     return render_template("index.html")
 
 @app.route('/upload', methods=['POST'])
-def upload():
+def upload_file():
     image_file = request.files['image']
     file_extension = image_file.filename.split('.')[-1].lower()
 
-    if file_extension != 'png':
+    if file_extension not in ('png', 'jpg', 'jpeg'):
         return render_template("index.html", text="Check file format.")
 
     pil_img = Image.open(BytesIO(image_file.read()))
@@ -62,11 +61,8 @@ def upload():
     response = requests.get(GITHUB_REPO_URL + unique_id + '.txt')
     
     if response.status_code == 200:
-        # Existing logic
         lines = response.text.splitlines()
-        text = ''
-        for line in lines:
-            # Your logic here
+        text = " ".join(lines)
         return render_template("index.html", text=text)
     else:
         try:
@@ -78,4 +74,4 @@ def upload():
             return render_template("index.html", text="Error in processing image.")
 
 if __name__ == '__main__':
-    app.run(port=8080, debug=True, host="0.0.0.0", threaded=True, use_reloader=True, passthrough_errors=True)
+    app.run(port=8080, debug=True, host='0.0.0.0')
