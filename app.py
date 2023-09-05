@@ -35,12 +35,6 @@ CORS(app)
 # GitHub repository URL for annotations
 GITHUB_REPO_URL = "https://raw.githubusercontent.com/jatin2088/Punjabi/main/annotations/"
 
-# Preprocessing function
-def preprocess_image(pil_img):
-    nparr = np.array(pil_img)
-    gray = cv2.cvtColor(nparr, cv2.COLOR_BGR2GRAY)
-    return gray
-
 # Perform OCR using Tesseract
 def perform_ocr(img):
     text = pytesseract.image_to_string(img, lang='pan', config='--psm 6')
@@ -59,21 +53,25 @@ def upload():
         return render_template("index.html", text="Check file format.")
 
     pil_img = Image.open(BytesIO(image_file.read()))
-    img = preprocess_image(pil_img)
+    nparr = np.array(pil_img)
+    img = cv2.cvtColor(nparr, cv2.COLOR_RGB2BGR)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     unique_id = pil_img.info.get("uniqueID", "")
 
     # Attempt to fetch annotations first
     response = requests.get(GITHUB_REPO_URL + unique_id + '.txt')
     if response.status_code == 200:
-        # Use annotations for text extraction (implement your existing logic)
-        pass
+        lines = response.text.splitlines()
+        text = ''
+        prev_y_center = 0
+        for line in lines:
+            # ... Your existing logic for using annotations
+        return render_template("index.html", text=text)
     else:
         # Fallback to Tesseract OCR
-        extracted_text = perform_ocr(img)
+        extracted_text = perform_ocr(gray)
         return render_template("index.html", text=extracted_text)
-
-    return render_template("index.html", text="An unexpected error occurred.")
 
 if __name__ == '__main__':
     app.run(port=8080, debug=True, host="0.0.0.0", threaded=True, use_reloader=True, passthrough_errors=True)
