@@ -2,5 +2,10 @@ services:
   - type: web
     name: my-flask-service
     env: python
-    buildCommand: pip install -r requirements.txt && apt-get update && apt-get install -y tesseract-ocr
+    buildCommand: |
+      pip install -r requirements.txt 
+      apt-get update 
+      apt-get install -y tesseract-ocr 
+      mkdir -p /usr/local/share/tessdata
+      wget -P /usr/local/share/tessdata https://github.com/jatin2088/Punjabi/blob/main/tesseract-ocr/4.00/tessdata/pan.traineddata?raw=true
     startCommand: python app.py
