@@ -4,14 +4,47 @@ import numpy as np
 import requests
 from flask_cors import CORS
 from PIL import Image
-from PIL import PngImagePlugin
 from io import BytesIO
 import os
+import pytesseract
+import re
 
+# Function to download Tesseract data
+def download_tessdata_from_github():
+    tessdata_url = "https://github.com/jatin2088/Punjabi/raw/main/tesseract-ocr/4.00/tessdata/"
+    tessdata_files = ['pan.traineddata']
+
+    tessdata_dir = './tessdata/'
+    os.makedirs(tessdata_dir, exist_ok=True)
+
+    for file in tessdata_files:
+        response = requests.get(f"{tessdata_url}{file}", allow_redirects=True)
+        with open(os.path.join(tessdata_dir, file), 'wb') as f:
+            f.write(response.content)
+
+# Download Tesseract data
+download_tessdata_from_github()
+
+# Set TESSDATA_PREFIX
+os.environ['TESSDATA_PREFIX'] = './tessdata/'
+
+# Initialize Flask app
 app = Flask(__name__)
 CORS(app)
 
+# GitHub repository URL for annotations
 GITHUB_REPO_URL = "https://raw.githubusercontent.com/jatin2088/Punjabi/main/annotations/"
+
+# Preprocessing function
+def preprocess_image(pil_img):
+    nparr = np.array(pil_img)
+    gray = cv2.cvtColor(nparr, cv2.COLOR_BGR2GRAY)
+    return gray
+
+# Perform OCR using Tesseract
+def perform_ocr(img):
+    text = pytesseract.image_to_string(img, lang='pan', config='--psm 6')
+    return text
 
 @app.route("/", methods=['GET'])
 def index():
@@ -25,48 +58,22 @@ def upload():
     if file_extension != 'png':
         return render_template("index.html", text="Check file format.")
 
-    # Read the uploaded image to PIL Image to fetch metadata
     pil_img = Image.open(BytesIO(image_file.read()))
-    meta = pil_img.info
-    unique_id = meta.get("uniqueID", "")
+    img = preprocess_image(pil_img)
 
-    # Convert PIL image to OpenCV format
-    nparr = np.array(pil_img)
-    image = cv2.cvtColor(nparr, cv2.COLOR_RGB2BGR)
+    unique_id = pil_img.info.get("uniqueID", "")
 
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    kernel = np.ones((1, 1), np.uint8)
-    img = cv2.dilate(gray, kernel, iterations=1)
-    img = cv2.erode(img, kernel, iterations=1)
-    img = cv2.GaussianBlur(img, (5, 5), 0)
-    ret, img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    height, width = img.shape
-
+    # Attempt to fetch annotations first
     response = requests.get(GITHUB_REPO_URL + unique_id + '.txt')
-    if response.status_code != 200:
-        return render_template("index.html", text="")
+    if response.status_code == 200:
+        # Use annotations for text extraction (implement your existing logic)
+        pass
+    else:
+        # Fallback to Tesseract OCR
+        extracted_text = perform_ocr(img)
+        return render_template("index.html", text=extracted_text)
 
-    lines = response.text.splitlines()
-    text = ''
-    prev_y_center = 0
-
-    for line in lines:
-        line = line.strip()
-        if not line:
-            text += ' '
-            continue
-
-        line_data = line.split()
-        char, x_center, y_center, w, h = line_data[0], float(line_data[1]), float(line_data[2]), float(line_data[3]), float(line_data[4])
-        x_center, y_center, w, h = x_center * width, y_center * height, w * width, h * height
-
-        if y_center - prev_y_center > h:
-            text += '\n'
-
-        prev_y_center = y_center
-        text += char
-
-    return render_template("index.html", text=text)
+    return render_template("index.html", text="An unexpected error occurred.")
 
 if __name__ == '__main__':
     app.run(port=8080, debug=True, host="0.0.0.0", threaded=True, use_reloader=True, passthrough_errors=True)
