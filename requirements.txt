@@ -10,3 +10,4 @@ scikit-learn==0.24.1
 gdown==3.13.0
 Jinja2==2.11.3 
 markupsafe==1.1.1
+itsdangerous==1.1.0  # Add this line
