@@ -13,11 +13,8 @@ import re
 app = Flask(__name__)
 CORS(app)
 
-# Set Tesseract binary path for Render environment
-pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
-
-# Download Tesseract Data to a writable directory in Render
-TESSDATA_PREFIX = '/mnt/data/tessdata'
+# Download Tesseract Data
+TESSDATA_PREFIX = '/tmp/tessdata'
 TESSDATA_URL = 'https://github.com/jatin2088/Punjabi/raw/main/tesseract-ocr/4.00/tessdata/'
 
 if not os.path.exists(TESSDATA_PREFIX):
@@ -69,7 +66,9 @@ def upload():
         lines = response.text.splitlines()
         text = ''
         for line in lines:
-            # Your logic here
+            # Add your logic here
+            text += line  # This appends each line to the 'text' variable
+
         return render_template("index.html", text=text)
     else:
         try:
