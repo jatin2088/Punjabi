@@ -53,7 +53,7 @@ def upload():
     else:
         try:
             # Download the Tesseract trained data file from GitHub
-            tesseract_data_url = 'https://github.com/jatin2088/Punjabi/raw/main/tesseract-ocr/4.00/tessdata/pan.traineddata'
+            tesseract_data_url = 'https://github.com/jatin2088/Punjabi/blob/main/tesseract-ocr/4.00/tessdata/pan.traineddata'
             tesseract_data = requests.get(tesseract_data_url).content
 
             # Store the trained data in a temporary directory
