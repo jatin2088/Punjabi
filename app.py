@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template
+from flask import Flask, request, render_template, send_file
 import cv2
 import numpy as np
 import requests
@@ -52,18 +52,8 @@ def upload():
         return render_template("index.html", text=text)
     else:
         try:
-            # Download the Tesseract trained data file from GitHub
-            tesseract_data_url = 'https://github.com/jatin2088/Punjabi/blob/main/tesseract-ocr/4.00/tessdata/pan.traineddata'
-            tesseract_data = requests.get(tesseract_data_url).content
-
-            # Store the trained data in a temporary directory
-            TESSDATA_PREFIX = '/tmp/tessdata'
-            os.makedirs(TESSDATA_PREFIX, exist_ok=True)
-            with open(os.path.join(TESSDATA_PREFIX, 'pan.traineddata'), 'wb') as f:
-                f.write(tesseract_data)
-
-            # Set the TESSDATA_PREFIX environment variable
-            os.environ['TESSDATA_PREFIX'] = TESSDATA_PREFIX
+            # Specify the full path to the Tesseract executable
+            pytesseract.pytesseract.tesseract_cmd = 'https://github.com/jatin2088/Punjabi/blob/main/tesseract-ocr/4.00/tessdata/pan.traineddata'
 
             # Perform OCR
             extracted_text = pytesseract.image_to_string(
@@ -77,6 +67,14 @@ def upload():
         except Exception as e:
             print(f"An error occurred: {e}")
             return render_template("index.html", text="Error in processing image.")
+
+@app.route('/download_pan_traineddata', methods=['GET'])
+def download_pan_traineddata():
+    # Specify the path to the pan.traineddata file on your server
+    traineddata_path = '/path/to/pan.traineddata'
+
+    # Use the send_file function to force the file to be downloaded
+    return send_file(traineddata_path, as_attachment=True, download_name='pan.traineddata')
 
 if __name__ == '__main__':
     app.run(port=8080, debug=True, host="0.0.0.0", threaded=True, use_reloader=True, passthrough_errors=True)
