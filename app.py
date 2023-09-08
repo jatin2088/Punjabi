@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, send_file
+from flask import Flask, request, render_template
 import cv2
 import numpy as np
 import requests
@@ -12,6 +12,28 @@ import re
 # Initialize Flask
 app = Flask(__name__)
 CORS(app)
+
+# Set Tesseract binary path for Render environment
+pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
+
+# Download Tesseract Data to a writable directory in Render
+TESSDATA_PREFIX = '/mnt/data/tessdata'
+TESSDATA_URL = 'https://github.com/jatin2088/Punjabi/raw/main/tesseract-ocr/4.00/tessdata/'
+
+if not os.path.exists(TESSDATA_PREFIX):
+    os.makedirs(TESSDATA_PREFIX)
+
+required_files = ['pan.traineddata']
+
+for file in required_files:
+    response = requests.get(TESSDATA_URL + file)
+    if response.status_code == 200:
+        with open(os.path.join(TESSDATA_PREFIX, file), 'wb') as f:
+            f.write(response.content)
+    else:
+        print(f"Failed to download {file}")
+
+os.environ['TESSDATA_PREFIX'] = TESSDATA_PREFIX
 
 # GitHub Repo URL
 GITHUB_REPO_URL = "https://raw.githubusercontent.com/jatin2088/Punjabi/main/annotations/"
@@ -48,33 +70,15 @@ def upload():
         text = ''
         for line in lines:
             # Your logic here
-            pass
         return render_template("index.html", text=text)
     else:
         try:
-            # Specify the full path to the Tesseract executable
-            pytesseract.pytesseract.tesseract_cmd = 'https://github.com/jatin2088/Punjabi/blob/main/tesseract-ocr/4.00/tessdata/pan.traineddata'
-
-            # Perform OCR
-            extracted_text = pytesseract.image_to_string(
-                Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)),
-                lang='pan',
-                config='--psm 6'
-            )
-            
+            extracted_text = pytesseract.image_to_string(Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)), lang='pan', config='--psm 6')
             filtered_text = filter_punjabi(extracted_text)
             return render_template("index.html", text=filtered_text)
         except Exception as e:
             print(f"An error occurred: {e}")
             return render_template("index.html", text="Error in processing image.")
-
-@app.route('/download_pan_traineddata', methods=['GET'])
-def download_pan_traineddata():
-    # Specify the path to the pan.traineddata file on your server
-    traineddata_path = '/path/to/pan.traineddata'
-
-    # Use the send_file function to force the file to be downloaded
-    return send_file(traineddata_path, as_attachment=True, download_name='pan.traineddata')
 
 if __name__ == '__main__':
     app.run(port=8080, debug=True, host="0.0.0.0", threaded=True, use_reloader=True, passthrough_errors=True)
