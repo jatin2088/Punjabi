@@ -15,7 +15,7 @@ CORS(app)
 
 # Download Tesseract Data
 TESSDATA_PREFIX = '/tmp/tessdata'
-TESSDATA_URL = 'https://github.com/jatin2088/Punjabi/raw/main/tesseract-ocr/4.00/tessdata/'
+TESSDATA_URL = 'https://github.com/jatin2088/Punjabi/blob/main/tesseract-ocr/4.00/tessdata/pan.traineddata?raw=true'
 
 if not os.path.exists(TESSDATA_PREFIX):
     os.makedirs(TESSDATA_PREFIX)
