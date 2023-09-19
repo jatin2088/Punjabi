@@ -4,6 +4,7 @@ import re
 import cv2
 import random
 import requests
+import numpy as np
 from google.cloud import vision
 from google.oauth2.credentials import Credentials
 
