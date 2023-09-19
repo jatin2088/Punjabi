@@ -95,10 +95,8 @@ def process_image():
     # Combine the filtered lines with line breaks
     final_text = '\n'.join(filtered_lines)
 
-    # Use Flask's Response class to return the JSON without escaping Unicode characters
-    response_data = {"text": final_text}
-    response = Response(response=json.dumps(response_data), status=200, mimetype="application/json")
-    return response
+    # Use Flask's jsonify function to return the JSON response without escaping Unicode characters
+    return jsonify(text=final_text)
 
 if __name__ == '__main__':
     app.run(port=8080, debug=True, host="0.0.0.0")
