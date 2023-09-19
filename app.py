@@ -93,10 +93,7 @@ def process_image():
     # Combine the filtered lines with line breaks
     final_text = '\n'.join(filtered_lines)
 
-    # Decode the Unicode escape sequences
-    decoded_text = bytes(final_text, "utf-8").decode("unicode_escape")
-
-    return jsonify(text=decoded_text)
+    return jsonify(text=final_text)
 
 if __name__ == '__main__':
     app.run(port=8080, debug=True, host="0.0.0.0")
