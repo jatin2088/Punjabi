@@ -1,83 +1,69 @@
-from flask import Flask, request, render_template
-import cv2
-import numpy as np
-import requests
-from flask_cors import CORS
-from PIL import Image
-from io import BytesIO
+from flask import Flask, request, render_template, redirect, url_for
 import os
-import pytesseract
 import re
+import cv2
+import random
+from google.cloud import vision
 
-# Initialize Flask
 app = Flask(__name__)
-CORS(app)
 
-# Download Tesseract Data
-TESSDATA_PREFIX = '/opt/render/project/src/.venv/bin/tesseract-ocr/4.00/tessdata'
-TESSDATA_URL = 'https://github.com/jatin2088/Punjabi/blob/main/tesseract-ocr/4.00/tessdata/pan.traineddata?raw=true'
+# Set the environment variable for authentication
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "https://raw.githubusercontent.com/jatin2088/Punjabi/main/service_account.json"
 
-if not os.path.exists(TESSDATA_PREFIX):
-    os.makedirs(TESSDATA_PREFIX)
-
-required_files = ['pan.traineddata']
-
-for file in required_files:
-    response = requests.get(TESSDATA_URL + file)
-    if response.status_code == 200:
-        with open(os.path.join(TESSDATA_PREFIX, file), 'wb') as f:
-            f.write(response.content)
-    else:
-        print(f"Failed to download {file}")
-
-os.environ['TESSDATA_PREFIX'] = TESSDATA_PREFIX
-
-# GitHub Repo URL
-GITHUB_REPO_URL = "https://raw.githubusercontent.com/jatin2088/Punjabi/main/annotations/"
-
-# Filter Punjabi Text
-def filter_punjabi(text):
-    pattern = re.compile('[^\u0A00-\u0A7F  \n]')
-    return pattern.sub('', text)
-
-@app.route("/", methods=['GET'])
+@app.route('/', methods=['GET', 'POST'])
 def index():
-    return render_template("index.html")
+    if request.method == 'POST':
+        image_file = request.files['file']
+        if image_file:
+            image_path = os.path.join('uploads', image_file.filename)
+            image_file.save(image_path)
 
-@app.route('/upload', methods=['POST'])
-def upload():
-    image_file = request.files['image']
-    file_extension = image_file.filename.split('.')[-1].lower()
+            # Load the image using OpenCV
+            img = cv2.imread(image_path, cv2.IMREAD_COLOR)
 
-    if file_extension != 'png':
-        return render_template("index.html", text="Check file format.")
+            # Convert the image to grayscale
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    pil_img = Image.open(BytesIO(image_file.read()))
-    meta = pil_img.info
-    unique_id = meta.get("uniqueID", "")
+            # Apply Gaussian blur
+            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
 
-    nparr = np.array(pil_img)
-    image = cv2.cvtColor(nparr, cv2.COLOR_RGB2BGR)
+            # Use adaptive thresholding
+            binary = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
 
-    response = requests.get(GITHUB_REPO_URL + unique_id + '.txt')
-    
-    if response.status_code == 200:
-        # Existing logic
-        lines = response.text.splitlines()
-        text = ''
-        for line in lines:
-            # Add your logic here
-            text += line  # This appends each line to the 'text' variable
+            # Morphological operations
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+            processed = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=1)
 
-        return render_template("index.html", text=text)
-    else:
-        try:
-            extracted_text = pytesseract.image_to_string(Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)), lang='pan', config='--psm 6')
-            filtered_text = filter_punjabi(extracted_text)
-            return render_template("index.html", text=filtered_text)
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            return render_template("index.html", text="Error in processing image.")
+            # Convert processed image back to the format suitable for Google Vision API
+            is_success, im_buf_arr = cv2.imencode(".jpg", processed)
+            byte_im = im_buf_arr.tobytes()
+
+            # Initialize the Vision API client
+            client = vision.ImageAnnotatorClient()
+            image = vision.Image(content=byte_im)
+
+            # Perform text detection
+            response = client.text_detection(image=image)
+            entire_text = response.text_annotations[0].description
+
+            # Regular expression to match Punjabi characters and spaces
+            punjabi_pattern = re.compile("[\u0A00-\u0A7F\s]+")
+
+            # Extract lines while retaining line breaks
+            lines = entire_text.split('\n')
+            filtered_lines = []
+
+            for line in lines:
+                # Filter out any non-Punjabi characters from each line
+                filtered_line = ''.join(punjabi_pattern.findall(line))
+                filtered_lines.append(filtered_line)
+
+            # Combine the filtered lines with line breaks
+            final_text = '\n'.join(filtered_lines)
+
+            return render_template('index.html', text=final_text)
+
+    return render_template('index.html', text=None)
 
 if __name__ == '__main__':
-    app.run(port=8080, debug=True, host="0.0.0.0", threaded=True, use_reloader=True, passthrough_errors=True)
+    app.run(debug=True)
