@@ -4,7 +4,6 @@ import re
 import cv2
 import random
 import json
-
 import requests
 import numpy as np
 from google.cloud import vision
@@ -97,12 +96,11 @@ def process_image():
 
     # Use Flask's jsonify function to return the JSON response without escaping Unicode characters
     response = app.response_class(
-    response=json.dumps({"text": final_text}, ensure_ascii=False),
-    status=200,
-    mimetype='application/json'
-)
-return response
-
+        response=json.dumps({"text": final_text}, ensure_ascii=False),
+        status=200,
+        mimetype='application/json'
+    )
+    return response
 
 if __name__ == '__main__':
     app.run(port=8080, debug=True, host="0.0.0.0")
