@@ -3,6 +3,8 @@ import os
 import re
 import cv2
 import random
+import json
+
 import requests
 import numpy as np
 from google.cloud import vision
