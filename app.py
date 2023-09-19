@@ -96,7 +96,13 @@ def process_image():
     final_text = '\n'.join(filtered_lines)
 
     # Use Flask's jsonify function to return the JSON response without escaping Unicode characters
-    return jsonify(text=final_text)
+   response = app.response_class(
+    response=json.dumps({"text": final_text}, ensure_ascii=False),
+    status=200,
+    mimetype='application/json'
+)
+return response
+
 
 if __name__ == '__main__':
     app.run(port=8080, debug=True, host="0.0.0.0")
