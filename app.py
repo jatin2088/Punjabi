@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 import os
 import re
 import cv2
@@ -93,7 +93,11 @@ def process_image():
     # Combine the filtered lines with line breaks
     final_text = '\n'.join(filtered_lines)
 
-    return jsonify(text=final_text)
+    # Use Flask's Response class to return the JSON without escaping Unicode characters
+    response_data = {"text": final_text}
+    response = Response(response=json.dumps(response_data), status=200, mimetype="application/json")
+    return response
 
 if __name__ == '__main__':
     app.run(port=8080, debug=True, host="0.0.0.0")
+
